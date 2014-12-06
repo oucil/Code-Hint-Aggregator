@@ -1,5 +1,4 @@
 # PHP Code Hint Aggregator
-==========================
 
 A utility for parsing a PHP applications class/function library and compiling a list of all Namespaces, Classes, Class Methods & Parameters and their corresponding code/type hints, BUT stripping out all actual source code guts and other documentation.  
 
@@ -7,7 +6,10 @@ The purpose is to allow contracted developers access to a reference library for 
 
 The Code Hint Aggregator will generate a file similar to the one that Eclipse uses for providing Code Hinting for PHP's function/class libraries (i.e. standard.php).  
 
-## Example Output
+### Example Output
+
+The following is an example of the output generated when the Code Hint Agregator is aimed at itself...
+
 ```php
 namespace eCommunities\CodeHintAggregator {
 
@@ -45,7 +47,7 @@ namespace eCommunities\CodeHintAggregator {
 }
 ```
 
-## TODO List
+### TODO List
 - Support non `.php` file extensions
 - Support 'ignore' lists
 - Add proper Exception handling

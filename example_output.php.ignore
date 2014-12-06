@@ -1,9 +1,9 @@
 <?php
 
-namespace eCommunities\CodeHintAggregator {
+namespace eCommunities\CodeHintAggregator { 
 
-	class Aggregator {
-
+	class Aggregator { 
+	
 		/**
 		 * Self-referencing directory tree iterator that traverses the application path
 		 * root and all subdirectories for PHP files
@@ -11,26 +11,32 @@ namespace eCommunities\CodeHintAggregator {
 		 * @return string
 		 */
 		public function listFiles($appPath) { }
-
+		
 		/**
 		 * Parse docblocks from classes.
 		 * NB: It's your responsibility to ensure that all external resources for the
 		 * target application are accessible to allow proper loading, i.e. use declarations
-		 * for external libraries.
+		 * for external libraries. 
 		 * @param string $file
 		 * @return string
 		 */
 		public function parseFile($file) { }
-
+		
 		/**
 		 * Parses a list of input files and outputs to either the screen [default] or a
 		 * target file.
-		 * @param array $fileList
 		 * @param Constant $format OUTPUT_SCREEN|OUTPUT_STRING|OUTPUT_DOWNLOAD|OUTPUT_FILE
-		 * @return number
+		 * @param string $filename Only required for OUTPUT_FILE
+		 * @return mixed
 		 */
-		public function output($fileList, $format) { }
+		public function output($format, $filename = null) { }
+		
+		/**
+		 * Returns the file list generated from the path traversal
+		 * @return array
+		 */
+		public function getFiles() { }
+	
+	} 
 
-	}
-
-}
+} 

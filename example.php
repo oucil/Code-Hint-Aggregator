@@ -25,7 +25,7 @@ $aggregator = new Aggregator();
 $application_root = __DIR__;
 
 // Traverse the reseource tree to identify PHP files
-$fileList = $aggregator->listFiles($application_root);
+$aggregator->listFiles($application_root);
 
 // Iterate over the identified PHP files, generate the documented class/method declarations, and output to screen.
-$aggregator->output($fileList,$aggregator::OUTPUT_SCREEN);
+$aggregator->output($aggregator::OUTPUT_SCREEN);

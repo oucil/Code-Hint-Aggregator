@@ -20,26 +20,29 @@ class Aggregator {
 	const OUTPUT_FILE = 4;
 	
 	/**
+	 * Holds the list of found php files.
+	 * @var array
+	 */
+	private $_files = array();
+	
+	/**
 	 * Self-referencing directory tree iterator that traverses the application path root and all subdirectories for PHP files
 	 * @param string $path Application root path
 	 * @return string
 	 */
 	public function listFiles($appPath) {
 		$resources = scandir($appPath);
-		foreach($resources as $key=>$resource) {
-			if(substr($resource, 0, 1) == '.') {
-				unset($resources[$key]);
-			} elseif(is_dir($appPath . DIRECTORY_SEPARATOR . $resource)) {
-				$subResources = $this->_dirIterator($appPath . DIRECTORY_SEPARATOR . $resource);
-				unset($resources[$key]);
-				$resources = array_merge($resources, $subResources);
-			} elseif(strtolower(substr($resource, -4)) == '.php') {
-				$resources[$key] = $appPath . DIRECTORY_SEPARATOR . $resource;
-			} else {
-				unset($resources[$key]);
+		foreach($resources as $key => $resource) {
+			if(substr($resource, 0, 1) !== '.') {
+				if(is_dir($appPath . DIRECTORY_SEPARATOR . $resource)) {
+					$this->listFiles($appPath . DIRECTORY_SEPARATOR . $resource);
+				} elseif(strtolower(substr($resource, -4)) == '.php') {
+					// TODO: Support non-php file extensions
+					$this->_files[] = $appPath . DIRECTORY_SEPARATOR . $resource;
+				}
 			}
 		}
-		return $resources;
+		return count($this->_files);
 	}
 	
 	/**
@@ -91,14 +94,14 @@ class Aggregator {
 	
 	/**
 	 * Parses a list of input files and outputs to either the screen [default] or a target file.
-	 * @param array $fileList
 	 * @param Constant $format OUTPUT_SCREEN|OUTPUT_STRING|OUTPUT_DOWNLOAD|OUTPUT_FILE
-	 * @return number
+	 * @param string $filename Only required for OUTPUT_FILE
+	 * @return mixed
 	 */
-	public function output($fileList,$format) {
+	public function output($format,$filename=NULL) {
 		// Parse the file list
 		$parsedFiles = array();
-		foreach($fileList as $file) {
+		foreach($this->_files as $file) {
 			$parsedFiles[$file] = $this->parseFile($file);
 		}
 		// Output to target
@@ -117,10 +120,14 @@ class Aggregator {
 			die;
 			break;
 		case(self::OUTPUT_STRING):
-			echo "COMING SOON!";	
+			return implode('',$parsedFiles);
 			break;
 		case(self::OUTPUT_FILE):
-			echo "COMING SOON!";
+			$output = '<?php '.PHP_EOL.PHP_EOL;
+			foreach($parsedFiles as $file => $block) {
+				$output .= $block.PHP_EOL.PHP_EOL;
+			}
+			return file_put_contents($filename, $output);
 			break;
 		case(self::OUTPUT_SCREEN):
 		default:
@@ -133,5 +140,13 @@ class Aggregator {
 			'<pre>'.implode(PHP_EOL.PHP_EOL, $parsedFiles).'</pre>';
 			break;
 		endswitch;
+	}
+	
+	/**
+	 * Returns the file list generated from the path traversal
+	 * @return array
+	 */
+	public function getFiles() {
+		return $this->_files;
 	}
 }

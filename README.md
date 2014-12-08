@@ -16,22 +16,19 @@ namespace eCommunities\CodeHintAggregator {
 	class Aggregator { 
 		
 		/**
+		 * Set the verbosity level
+		 * @param boolean $verbose
+		 * @return Aggregator
+		 */
+		public function setVerbose($verbose) { }
+		
+		/**
 		 * Self-referencing directory tree iterator that traverses the application path
 		 * root and all subdirectories for PHP files
 		 * @param string $path Application root path
-		 * @return string
+		 * @return Aggregator
 		 */
 		public function listFiles($appPath) { }
-		
-		/**
-		 * Parse docblocks from classes.
-		 * NB: It's your responsibility to ensure that all external resources for the
-		 * target application are accessible to allow proper loading, i.e. use declarations
-		 * for external libraries. 
-		 * @param string $file
-		 * @return string
-		 */
-		public function parseFile($file) { }
 		
 		/**
 		 * Parses a list of input files and outputs to either the screen [default] or a
@@ -47,16 +44,29 @@ namespace eCommunities\CodeHintAggregator {
 		 * @return array
 		 */
 		public function getFiles() { }
-	
+		
 	} 
 
-} 
+}
 ```
 
+### How to Use
+1. If your application requires it's own `autoloader`, create a PHP include file in the `/loaders/` directory and it will automatically be included by the `reflection` utility while parsing your application files.
+2. Edit the `example.php` file or create a copy of it and modify the `$application_root` variable with the path for your application.
+3. It is recommended that you run the utility with the default output method (`OUTPUT_SCREEN`) first, if all is well, you can use any of the other output methods available (`OUTPUT_FILE`, `OUTPUT_DOWNLOAD`, `OUTPUT_STRING`).
+4. Profit!
+
+### Known Issues
+- None right now, but this is still al ALPHA so beware!
+
 ### TODO List
-- Support non `.php` file extensions
-- Support 'ignore' lists
-- Add proper Exception handling
-- Add CONST support, and public\protected parameter support
-- Add syntax highlighting support
-- Namespace filtering (ignore remote resources)
+######(in no specific order of importance)
+1. Support non `.php` file extensions
+2. Support 'ignore' lists
+3. Add proper Exception handling
+4. Add support for:
+  - Interface
+  - CONST
+  - public\protected parameters
+5. Add syntax highlighting support
+6. Namespace filtering (ignore remote resources)

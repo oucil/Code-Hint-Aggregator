@@ -8,10 +8,6 @@
  */
 namespace eCommunities\CodeHintAggregator;
 
-use \Zend\Code\Reflection\FileReflection;
-use \Zend\Code\Generator\MethodGenerator;
-use Zend\Config\Processor\Constant;
-	
 class Aggregator {
 	
 	const OUTPUT_SCREEN = 1; 
@@ -26,9 +22,29 @@ class Aggregator {
 	private $_files = array();
 	
 	/**
+	 * Indicates if operations should be run with verbose output.
+	 * @var boolean
+	 */
+	private $_verbose = FALSE;
+	
+	/**
+	 * Set the verbosity level
+	 * @param boolean $verbose
+	 * @return Aggregator
+	 */
+	public function setVerbose($verbose) {
+		if ($verbose) {
+			$this->_verbose = TRUE;
+		} else {
+			$this->_verbose = FALSE;
+		}
+		return $this;
+	}
+	
+	/**
 	 * Self-referencing directory tree iterator that traverses the application path root and all subdirectories for PHP files
 	 * @param string $path Application root path
-	 * @return string
+	 * @return Aggregator
 	 */
 	public function listFiles($appPath) {
 		$resources = scandir($appPath);
@@ -37,59 +53,22 @@ class Aggregator {
 				if(is_dir($appPath . DIRECTORY_SEPARATOR . $resource)) {
 					$this->listFiles($appPath . DIRECTORY_SEPARATOR . $resource);
 				} elseif(strtolower(substr($resource, -4)) == '.php') {
+					$tokens = token_get_all(file_get_contents($appPath . DIRECTORY_SEPARATOR . $resource,TRUE));
+					$valid = FALSE;
+					foreach($tokens as $token) {
+						// TODO: Test effect of including T_CONST,T_DECLARE below
+						if (isset($token[0]) && in_array($token[0],array(T_CLASS,T_FUNCTION,T_INTERFACE))) {
+							$valid = TRUE;
+							break;
+						}
+					}
+					if (!$valid) { continue; }
 					// TODO: Support non-php file extensions
 					$this->_files[] = $appPath . DIRECTORY_SEPARATOR . $resource;
 				}
 			}
 		}
-		return count($this->_files);
-	}
-	
-	/**
-	 * Parse docblocks from classes.
-	 * NB: It's your responsibility to ensure that all external resources for the target application are accessible to allow proper loading, i.e. use declarations for external libraries. 
-	 * @param string $file
-	 * @return string
-	 */
-	public function parseFile($file) {
-		$output = '';
-		
-		// File must be included for reflection.
-		include_once $file;
-		$reflection = new FileReflection($file);
-		
-		foreach ($reflection->getClasses() as $class) {
-			$namespace = $class->getNamespaceName();
-		    $className = $class->getShortName();
-		    
-		    // Open Namespace
-		    $output .= ($namespace ? 'namespace '.$namespace.' { '.PHP_EOL.PHP_EOL : NULL);
-		    
-		    // Open Class
-		    $output .= 'class '. $className. ' { '.PHP_EOL.PHP_EOL;
-		    
-		    // TODO: Add CONST support
-		    // TODO: Add public \ protected parameter support
-		    
-		    foreach ($class->getMethods() as $methodReflection) {
-		        $method = MethodGenerator::fromReflection($methodReflection);
-		        $docblock = $method->getDocblock();
-		        if ($docblock) {
-		            $output .= $docblock->generate();
-		        }
-		        $params = implode(', ', array_map(function($item) {
-		            return $item->generate();
-		        }, $method->getParameters()));
-		        $output .= 'public function '.$method->getName() . '(' . $params . ') { }'.PHP_EOL.PHP_EOL;
-		    }
-		    
-		    // Close Class
-		    $output .= '} '.PHP_EOL.PHP_EOL;
-		    
-		    // Close Namespace
-		    $output .= ($namespace ? '} '.PHP_EOL.PHP_EOL : NULL);
-		}
-		return $output;
+		return $this;
 	}
 	
 	/**
@@ -99,35 +78,74 @@ class Aggregator {
 	 * @return mixed
 	 */
 	public function output($format,$filename=NULL) {
-		// Parse the file list
-		$parsedFiles = array();
-		foreach($this->_files as $file) {
-			$parsedFiles[$file] = $this->parseFile($file);
+		// If verbosity is on, switcch format to SCREEN.
+		if ($this->_verbose && $format !== self::OUTPUT_SCREEN) { echo '<h3 style="color:#900;">*** Forcing output to SCREEN ***</h3>'; flush(); $format = self::OUTPUT_SCREEN; }
+		
+		// Initialize curl and use it to get the output for each file, then store that files response in a temporary file, so it can be output later.
+		$curl = curl_init();
+		$uri = dirname($_SERVER['SCRIPT_NAME']);
+		if ($uri == '.' || $uri == '\\') { $uri = '/'; } else { $uri = str_replace('\\',DIRECTORY_SEPARATOR,$uri); }
+		$reflector = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 'https' : 'http').'://'.$_SERVER['HTTP_HOST'].$uri.'reflector.php?file=';
+		$temp_file = tempnam(sys_get_temp_dir(), 'AGG');
+		$reference_handle = fopen($temp_file,'w+b');
+		if ($reference_handle === FALSE) { trigger_error('Failed to open file for writing!',E_USER_ERROR); }
+		
+		if ($this->_verbose) { echo '<h1>Opening temporary file ('.$temp_file.') for writing...</h1>'; flush(); }
+		
+		fwrite($reference_handle,'<?php '.PHP_EOL.PHP_EOL);
+		foreach($this->_files as $fid => $file) {
+			set_time_limit(10);
+			curl_setopt($curl, CURLOPT_URL, $reflector.urlencode($file));
+			curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+			curl_setopt($curl, CURLOPT_HEADER, false);
+			curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+			$output = curl_exec($curl);
+			
+			if ($this->_verbose) { echo '<h3>'.($fid+1).'. '.$file.' Output...</h3><pre>'.$output.'</pre>'; flush(); }
+			
+			if($output === FALSE) {
+				trigger_error('Curl error: '.curl_error($curl),E_USER_ERROR);
+				die;
+			} else {
+				if (fwrite($reference_handle, $output.PHP_EOL.PHP_EOL) === FALSE) {
+					trigger_error('Writing to temporary file failed!',E_USER_ERROR);
+					die;
+				}
+			}
 		}
+		curl_close($curl);
+		
 		// Output to target
 		switch($format):
 		case(self::OUTPUT_DOWNLOAD):
 			// Output to file
-			$output = '<?php '.PHP_EOL.PHP_EOL;
-			foreach($parsedFiles as $file => $block) {
-				$output .= $block.PHP_EOL.PHP_EOL;
-			}
+			$meta = stream_get_meta_data($reference_handle);
 			header('HTTP/1.1 200 OK');
-			header('Content-Length: '.strlen($output));
+			header('Content-Length: '.filesize($meta['uri']));
 			header('Content-Type: application/php');
 			header('Content-Disposition: attachment; filename="reference_manual.php"');
-			echo $output;
+			while (!feof($reference_handle)) {
+				set_time_limit(10);
+		        echo fread($reference_handle, 2048);
+		    }
+		    fclose($reference_handle);
 			die;
 			break;
 		case(self::OUTPUT_STRING):
-			return implode('',$parsedFiles);
+			$output = NULL;
+			// Skip the <?php portion or the output will not be visible.
+			fseek($reference_handle, 5);
+			while (!feof($reference_handle)) {
+				set_time_limit(10);
+				$output = $output.fread($reference_handle, 2048);
+			}
+			fclose($reference_handle);
+			return $output;
 			break;
 		case(self::OUTPUT_FILE):
-			$output = '<?php '.PHP_EOL.PHP_EOL;
-			foreach($parsedFiles as $file => $block) {
-				$output .= $block.PHP_EOL.PHP_EOL;
-			}
-			return file_put_contents($filename, $output);
+			$meta = stream_get_meta_data($reference_handle);
+			rename($meta['uri'], $filename);
+			fclose($reference_handle);
 			break;
 		case(self::OUTPUT_SCREEN):
 		default:
@@ -135,9 +153,17 @@ class Aggregator {
 			// TODO: Add syntax highlighting support
 			echo
 			'<h1>Parsed PHP Files</h1>'.
-			'<ol><li>'.implode('</li><li>',array_keys($parsedFiles)).'</li></ol>'.
+			'<ol><li>'.implode('</li><li>',$this->_files).'</li></ol>'.
 			'<h1>Output</h1>'.
-			'<pre>'.implode(PHP_EOL.PHP_EOL, $parsedFiles).'</pre>';
+			'<pre>';
+			// Skip the <?php portion or the output will not be visible.
+			fseek($reference_handle, 5);
+			while (!feof($reference_handle)) {
+				set_time_limit(10);
+				echo fread($reference_handle, 2048);
+			}
+			echo '</pre>';
+			fclose($reference_handle);
 			break;
 		endswitch;
 	}
